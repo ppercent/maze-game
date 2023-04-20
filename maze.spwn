@@ -1,0 +1,321 @@
+gs = import gamescene
+extract obj_props
+
+
+layout_group = ?g
+alpha_group = gs.hidden_group // the gamescene has an alpha 0 group on purpose
+
+rotate_spot = counter(0)
+101g.toggle_on()
+$.add(obj{
+    OBJ_ID:1334,
+    X:6000,
+    Y:0,
+    GROUPS:133g,
+    SCALING:1000
+})
+
+
+player_hand_col = ?b
+
+-> 5g.follow(6g)
+5g.alpha(0)
+
+
+
+26g.follow(6g)
+27g.follow(6g)
+
+
+indicator = 10g
+on(gs.button_b(), !{
+    ->6g.rotate(5g, 90)
+    ->26g.rotate(5g, 90,0.07, easing = EASE_IN_OUT)
+    27g.rotate(5g, 90)
+    rotate_spot += 1
+    if rotate_spot >= 4 {
+        rotate_spot = 0
+    }
+})
+
+//spot 0 = 0°, spot 1 = 90°, spot 2 = 180°, spot 3 = 270°
+//spot 0 = x10 y0, spot 1 = x0 y-10, spot 2 = x-10 y0, spot 3 = x0 y10
+
+
+maze = "
+#####################################################################################################
+#P....#.....#.#.........#.....#...............#.......#.#...........#.#.#.....#...#.#.....#.#.......#
+#####.###.#.#.#.###.#.#.#B#.#.###.#.#.#.#####.#.###.###.#.###.#.#####.#.#.#.###.#.#.#.###.#.###.#.###
+#.#.#...#.#.......#.#.#.#.#.#.#...#.#.#...#.....#.....#...#.#.#.....#...#.#.....#.......#...#...#...#
+#.#.#.#.#######.#.#.#########.#######.#######.###.###.#####.#####.#.###.#.#########.#####.#######.###
+#.....#...#.#...#.#.......#.......#.........#.#...#.#.#.........#.#.#.....#.#...#.....#...#.#...#...#
+#####.#####.#.#.#.###.#####.###.#.###.#.#.#####.#.#.#.#####.#.###.#.#.#####.###.#.#.#######.#.#####.#
+#.............#.#.#...........#.#.....#.#...#...#...#.......#.....#.............#.#.................F
+#####################################################################################################
+".
+    split("\n").
+    filter(l => l.trim().length > 0) 
+
+maze_blocks = ?b
+win_collision = ?b
+bonus_collision_id = ?b
+bonus_collision_group = ?g
+
+
+BLOCKS_OFFSET_X = -25
+BLOCKS_OFFSET_Y = 15
+MAZE_BLOCKS_SCALING = 1
+
+for y in 0..maze.length {
+    for x in 0..maze[y].length {
+        x_pos = x * 30 * MAZE_BLOCKS_SCALING + BLOCKS_OFFSET_X
+        y_pos = y * 30 * MAZE_BLOCKS_SCALING + BLOCKS_OFFSET_Y
+        match maze[y][x] {
+            =="#": $.add(obj{
+                OBJ_ID: 1816,
+                X: x_pos,
+                Y: y_pos,
+                BLOCK_A: maze_blocks,
+                GROUPS: [25g,layout_group, alpha_group],
+                SCALING: MAZE_BLOCKS_SCALING
+            }),
+            =="F": $.add(obj { // win block
+                OBJ_ID: 1816,
+                X: x_pos,
+                Y: y_pos,
+                BLOCK_A: win_collision,
+                GROUPS: [25g,layout_group],
+                SCALING: MAZE_BLOCKS_SCALING
+            }),
+            =="P": () {
+                $.add(obj{ // player hand
+                    OBJ_ID: 1816,
+                    X: x_pos + 20 * MAZE_BLOCKS_SCALING,
+                    Y: y_pos,
+                    BLOCK_A: player_hand_col,
+                    GROUPS: [27g,alpha_group],
+                    SCALING: MAZE_BLOCKS_SCALING / 2,
+                    DYNAMIC_BLOCK: true
+                })
+                $.add(obj{ //indicator
+                    OBJ_ID:1603,
+                    X: x_pos,
+                    Y: y_pos,
+                    SCALING:1,
+                    ROTATION:0,
+                    GROUPS:[6g, layout_group, indicator]
+                })
+                $.add(obj{ //center
+                    OBJ_ID:1764,
+                    X:x_pos,
+                    Y:y_pos,
+                    SCALING:1,
+                    GROUPS:[5g]
+                })
+            }(),
+            =="B": $.add(obj{
+                OBJ_ID: 1816,
+                X: x_pos,   
+                Y: y_pos,
+                BLOCK_A: bonus_collision_id, 
+                GROUPS: [alpha_group, bonus_collision_group],
+                SCALING: MAZE_BLOCKS_SCALING / 2
+            })
+        }
+    }
+}
+
+
+//collision implementation : done
+//small_light.toggle_off()
+//boost_light.toggle_on()
+
+on(collision(bonus_collision_id, player_hand_col), !{
+    ->75g.alpha(0, 0.4)
+    ->71g.alpha(0, 0.3)
+    BG.pulse(rgb8(0, 255, 0), fade_out = 0.6)
+    
+})
+
+
+bol_counter = counter(bits = 1)
+
+is_colliding = (block_a: @block, block_b: @block) {
+    cunter = counter(false)
+    on(collision(block_a, block_b), !{ cunter += 1 })
+    on(collision_exit(block_a, block_b), !{ cunter -= 1 })
+    return cunter
+}
+
+total_move_counter = counter(0)
+collision_hand_counter = is_colliding(maze_blocks, player_hand_col)
+
+on(gs.button_a(), !{
+    if collision_hand_counter == 0 {
+        value = rotate_spot.to_const(0..4)
+        let x_final_value = 0
+        let y_final_value = 0
+        match value {
+            ==0: (){ x_final_value = 10 }(),
+            ==1: (){ y_final_value = -10 }(),
+            ==2: (){ x_final_value = -10 }(),
+            ==3: (){ y_final_value = 10 }()
+        }
+        6g.move(x_final_value, y_final_value,)
+        ->90g.move(x_final_value, y_final_value, 0.25, easing = EASE_IN_OUT)
+        5g.move_to(indicator, 0)
+        if bol_counter == 0 {
+            total_move_counter += 1
+            5g.move_to(indicator)
+        }
+        
+    
+    }else if collision_hand_counter == 1 {
+
+} 
+})
+
+
+
+//scroll to the left : x = 450
+//scroll to the left : y = from 240 to 0
+
+//scroll to the right : x = 100
+//scroll to the right : y = from 240 to 0
+block_id_left = ?b
+block_id_right = ?b
+move_groups = ?g
+toggle_id_right = ?g
+
+line_scroll_left = (){
+    for i in 0..12{
+        $.add(obj {
+            OBJ_ID: 1816,
+            X: 485,
+            Y: 0 + i*30,
+            SCALING: 1,
+            BLOCK_A: block_id_left,
+            GROUPS : move_groups
+        })
+    }
+}
+line_scroll_left()
+
+line_scroll_right = (){
+    for i in 0..12{
+        $.add(obj {
+            OBJ_ID: 1816,
+            X: -20,
+            Y: 0 + i*30,
+            SCALING: 1,
+            BLOCK_A:block_id_right,
+            GROUPS: [move_groups,toggle_id_right]
+        })
+    }
+}
+line_scroll_right()
+
+
+toggle_id_right.toggle_off()
+
+
+on(collision(block_id_left, player_hand_col), !{
+    ->layout_group.move(-105, 0, 0.3, easing = EASE_IN_OUT)
+    90g.move(-105, 0, 0.3, easing = EASE_IN_OUT)
+    
+    toggle_id_right.toggle_on()
+})
+
+on(collision(block_id_right, player_hand_col), !{
+    ->layout_group.move(90, 0, 0.3, easing = EASE_IN_OUT)
+    90g.move(90, 0, 0.3, easing = EASE_IN_OUT)
+})
+133g.toggle_off()
+
+
+MAX_TIMER = 135
+
+timer = counter(MAX_TIMER, bits = MAX_TIMER.log(2).ceil())
+timer_follow_group = ?g
+toggle_game_over = ?g
+timer_group = ?g
+
+$.add(obj{
+    OBJ_ID:1615,
+    X:70,
+    Y:200,
+    ITEM:timer.item,
+    GROUPS:[timer_follow_group,timer_group]
+}) 
+
+$.add(obj{
+    OBJ_ID:1615,
+    X:70,
+    Y:200,
+    ITEM:total_move_counter.item,
+    GROUPS:[timer_follow_group]
+}) 
+
+game_over_group = ?g
+let game_over_message = "Game Over !".to_obj().with(GROUPS, [timer_follow_group, toggle_game_over, game_over_group]).add()
+toggle_game_over.toggle_off()
+
+100g.toggle_off()
+
+
+
+saw_group = ?g
+$.add(obj{
+    OBJ_ID:88,
+    X:0,
+    Y:750,
+    SCALING:5,
+    GROUPS:saw_group
+})
+saw_group.alpha(0)
+move_groups.alpha(0)
+moving_timer = while_loop(() => true, () { timer -= 1 }, delay = 1.00)
+
+on(collision(player_hand_col, win_collision), !{
+    100g.toggle_on()
+    101g.toggle_off()
+    133g.toggle_on()
+    66g.alpha(0)
+    bol_counter += 1
+    wait(0.5) 
+    ->66g.alpha(100, 0.2)
+    65g.move(80, -15, 1, easing = EASE_IN_OUT) // left counter group
+    66g.move(-30, -40, 1.4, easing = BOUNCE_OUT) //both counter display will have this group
+})
+
+on(timer.reaches(0), !{
+    saw_group.move(0, -250)
+    timer_group.toggle_off()
+    game_over_group.toggle_on()
+})
+
+
+
+lock_y = (group: @group) => group.lock_to_player(lock_x = true, lock_y = false)
+
+lock_y(saw_group)
+
+moving_layout = () {
+    wait(0.5)
+    lock_y(25g)
+    lock_y(move_groups)
+    lock_y(6g)
+    lock_y(timer_follow_group)
+    lock_y(50g)
+    lock_y(bonus_collision_group)
+}
+-> moving_layout() 
+
+
+
+
+//group : layout | deco
+//maze walls group :
+//71g : the decoration of the bonus will be invisible
+//75g : small area will be invisible
+//dark vision: 50g + 90g
