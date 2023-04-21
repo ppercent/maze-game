@@ -3,7 +3,7 @@ extract obj_props
 
 
 layout_group = ?g
-alpha_group = gs.hidden_group // the gamescene has an alpha 0 group on purpose
+alpha_group = gs.hidden_group 
 
 rotate_spot = counter(0)
 101g.toggle_on()
